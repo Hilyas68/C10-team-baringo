@@ -1,6 +1,6 @@
 # C10 – Team Baringo — RAG Document Retrieval for Agronomic Advice
 
-Retrieval engine for a Retrieval-Augmented Generation (RAG) system that surfaces agricultural-extension advice for smallholder farmers in Sub-Saharan Africa. Built for the Kaggle competition **agricultural-extension-rag-smart-retrieval-for-farmers**.
+Retrieval engine for a RAG system surfacing agricultural-extension advice for smallholder farmers in Sub-Saharan Africa. Built for the Kaggle competition **agricultural-extension-rag-smart-retrieval-for-farmers**.
 
 ## Dataset
 
@@ -15,7 +15,7 @@ Alongside the corpus: 308 training queries and 200 test queries (natural-languag
 
 Auditing `documents.csv` found real gaps: Maize/Tomato/Rice/Cassava make up 54.5% of documents while Pearl millet (a Sahelian staple) is only 1.4%; Nigeria/Ghana/Tanzania/Kenya make up 58% across just 4 of ~48 Sub-Saharan African countries. The corpus is also English-only and text-only. Full detail: `docs/data_card.pdf`.
 
-The competition data (`documents.csv`, `train_queries.csv`, `qrels_train.csv`, `test_queries.csv`, `sample_submission.csv`, `baseline_submission.csv`) is bundled directly in `data/` — small enough (~480 KB total) to include in the repo.
+The competition CSVs are bundled directly in `data/` (~480 KB total).
 
 ## Training Pipeline
 
@@ -49,24 +49,29 @@ Documents absent from the judged pool count as relevance 0.
 | Dense + cross-encoder rerank | 0.778 | **0.836** |
 | Fine-tuned bi-encoder (held-out val only) | 0.718 (vs. 0.737 pretrained) | not submitted |
 
-Fine-tuning was evaluated on a held-out 61-query validation split (not used to build training triplets) specifically to catch overfitting rather than trust in-sample improvement — it caught exactly that.
+Fine-tuning used a held-out 61-query validation split (not in the training triplets) specifically to catch overfitting rather than trust in-sample gains — it caught exactly that.
 
 ## Reproduction
 
-The full pipeline is in `scripts/retrieval_pipeline.ipynb`, built and run inside a **Kaggle Notebook** (the challenge kernel has no internet access, so all models must be attached as inputs rather than downloaded at runtime):
+`src/retrieval.py` + `scripts/run.py` run **locally**, no Kaggle account needed — data is bundled in `data/`, and the bi-encoder/cross-encoder are pulled directly from Hugging Face.
 
-1. Upload this repo's `data/` files as a Kaggle dataset input (or attach the original competition: `agricultural-extension-rag-smart-retrieval-for-farmers`), and update the notebook's file paths if needed.
-2. Attach two models via **"Add Input" → Models**:
-   - Bi-encoder: `shree0910/minilm-sentence-transformer` (MiniLM, sentence-transformers format)
-   - Cross-encoder: `johnsonhk88/cross-encoderms-marco-minilm-l-6-v2` (`ms-marco-MiniLM-L-6-v2`)
-3. Run the notebook cells top to bottom. Each stage prints its nDCG@5 on `train_queries`/`qrels_train` before the next stage builds on it.
-4. The final cell writes `submission.csv` in the required long format (`QueryId, DocumentId`, top-5 per query, best first), with asserts checking every query has exactly 5 rows before writing.
+```bash
+python3 -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
 
-Outside Kaggle (with internet access), the same code works by pointing at the public Hugging Face model ids instead of local paths: `sentence-transformers/all-MiniLM-L6-v2` and `cross-encoder/ms-marco-MiniLM-L-6-v2`.
+python scripts/run.py eval      # nDCG@5 for every stage on train_queries/qrels_train
+python scripts/run.py submit    # writes submission.csv (dense retrieval + rerank)
+```
+
+Verified locally: `eval` reproduces the table above exactly (0.5031 / 0.5228 / 0.7083 / 0.7780); `submit` writes 1000 rows and reproduces the same top-5 for query 1001 (`4,1,3,5,2`) as our Kaggle-scored submission. First run downloads ~90 MB of weights; `submit` takes ~35s on CPU.
+
+`scripts/retrieval_pipeline.ipynb` is the original exploratory notebook, built stage-by-stage inside a **Kaggle Notebook** (no internet — models attached as Kaggle Model inputs: `shree0910/minilm-sentence-transformer`, `johnsonhk88/cross-encoderms-marco-minilm-l-6-v2`). `src/retrieval.py` is a locally-runnable rewrite of the same logic — same models, same results.
+
+> macOS note: an SSL error downloading from Hugging Face is a known Homebrew-Python/macOS trust-store mismatch, not a code bug — `truststore` (in `requirements.txt`) routes around it.
 
 ## Appendix
 
 **Team**: C10 – Team Baringo
 
-**Contributors**: Hassan Liasu, Gloria Paucara Cerpa
+**Contributors**: Hassan Liasu, Gloria Paucara Cerpa - Problem statement.
 
